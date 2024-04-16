@@ -16,6 +16,7 @@ struct ContentView: View {
             Text("Hello, world!")
         }
         .padding()
+        .needsInternet() /// Makes this View react to network changes
     }
 }
 
