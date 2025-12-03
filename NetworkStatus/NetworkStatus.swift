@@ -9,42 +9,26 @@ import Foundation
 import Network
 import SwiftUI
 
-class NetworkStatus {
+actor NetworkStatus {
     static let shared = NetworkStatus()
     
-    private var monitor: NWPathMonitor?
-    private var queue = DispatchQueue.global(qos: .background)
+    private let monitor = NWPathMonitor()
+    private let queue = DispatchQueue(label: "NetworkStatusMonitor")
     
     private init() {
-        startMonitoring()
-    }
-    
-    private func startMonitoring() {
-        monitor = NWPathMonitor()
-        monitor?.start(queue: queue)
+        monitor.start(queue: queue)
     }
     
     func networkUpdates() -> AsyncStream<Bool> {
-        return AsyncStream { continuation in
-                        
-            self.monitor?.pathUpdateHandler = { path in
+        AsyncStream { continuation in
+            self.monitor.pathUpdateHandler = { path in
                 let isConnected = path.status == .satisfied
                 continuation.yield(isConnected)
             }
-            
-            continuation.onTermination = { @Sendable [weak self] _ in
-                self?.stopMonitoring()
+            continuation.onTermination = { _ in
+                self.monitor.cancel()
             }
         }
-    }
-    
-    private func stopMonitoring() {
-        monitor?.cancel()
-        monitor = nil
-    }
-    
-    deinit {
-        stopMonitoring()
     }
 }
 
@@ -73,14 +57,14 @@ struct ObserveNetworkStatus: ViewModifier {
         }
         .animation(.easeInOut, value: isConnected)
         .task {
-            for await status in NetworkStatus.shared.networkUpdates() {
+            for await status in await NetworkStatus.shared.networkUpdates() {
                 isConnected = status
             }
         }
     }
 }
 
- extension View {
+extension View {
     func needsInternet() -> some View {
         self.modifier(ObserveNetworkStatus())
     }
